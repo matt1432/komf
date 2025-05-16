@@ -40,7 +40,7 @@ class ComicVineMetadataProvider(
         .expireAfterWrite(30.minutes)
         .build()
     private val startYearRegex = "\\((?<startYear>\\d{4})(-\\d{4})?\\)".toRegex()
-    private val comicIdRegex = """\[CV=(?<id>\d+)\]""".toRegex()
+    private val comicIdRegex = """\[cv-(?<id>\d+)\]""".toRegex()
 
     override fun providerName() = COMIC_VINE
 
