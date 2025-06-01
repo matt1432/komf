@@ -92,7 +92,12 @@ class ComicVineMetadataProvider(
     override suspend fun matchSeriesMetadata(matchQuery: MatchQuery): ProviderSeriesMetadata? {
         val seriesName = removeParentheses(matchQuery.seriesName)
 
-        val extractedId = extractVolumeId(matchQuery.seriesName)
+        var extractedId = extractVolumeId(matchQuery.seriesFolder ?: matchQuery.seriesName)
+
+        // Check the seriesName if no id was found in seriesFolder
+        if (matchQuery.seriesFolder != null && extractedId == null) {
+            extractedId = extractVolumeId(matchQuery.seriesName)
+        }
 
         if (extractedId != null) {
             val result = handleResult(client.getVolume(ComicVineVolumeId(extractedId)))
