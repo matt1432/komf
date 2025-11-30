@@ -35,12 +35,20 @@ class ComicVineMetadataProvider(
     private val nameMatcher: NameSimilarityMatcher,
     private val fetchSeriesCovers: Boolean,
     private val fetchBookCovers: Boolean,
+    private val idFormat: String?,
 ) : MetadataProvider {
     private val storyArcCache = Cache.Builder<ComicVineStoryArcId, ComicVineStoryArc>()
         .expireAfterWrite(30.minutes)
         .build()
     private val startYearRegex = "\\((?<startYear>\\d{4})(-\\d{4})?\\)".toRegex()
-    private val comicIdRegex = """\[cv-(?<id>\d+)\]""".toRegex()
+
+    private val idRegex = (idFormat?.split("{id}", limit = 2)?.let { parts ->
+        Regex.escape(parts[0]) + "(?<id>\\d+)" + Regex.escape(parts[1])
+    })?.toRegex()
+
+    private fun extractVolumeId(seriesName: String): Int? {
+        return idRegex?.find(seriesName)?.groups?.get("id")?.value?.toIntOrNull()
+    }
 
     override fun providerName() = COMIC_VINE
 
@@ -70,16 +78,14 @@ class ComicVineMetadataProvider(
         return mapper.toBookMetadata(issue, storyArcs, cover)
     }
 
-    private fun extractVolumeId(seriesName: String): Int? {
-        return comicIdRegex.find(seriesName)?.groups?.get("id")?.value?.toIntOrNull()
-    }
-
     override suspend fun searchSeries(seriesName: String, limit: Int): Collection<SeriesSearchResult> {
-        val extractedId = extractVolumeId(seriesName)
+        if (idFormat != null) {
+            val extractedId = extractVolumeId(seriesName)
 
-        if (extractedId != null) {
-            val result = handleResult(client.getVolume(ComicVineVolumeId(extractedId)))
-            return mutableListOf(mapper.toSeriesSearchResult(result))
+            if (extractedId != null) {
+                val result = handleResult(client.getVolume(ComicVineVolumeId(extractedId)))
+                return mutableListOf(mapper.toSeriesSearchResult(result))
+            }
         }
 
         val result = handleResult(
@@ -92,16 +98,18 @@ class ComicVineMetadataProvider(
     override suspend fun matchSeriesMetadata(matchQuery: MatchQuery): ProviderSeriesMetadata? {
         val seriesName = removeParentheses(matchQuery.seriesName)
 
-        var extractedId = extractVolumeId(matchQuery.seriesFolder ?: matchQuery.seriesName)
+        if (idFormat != null) {
+            var extractedId = extractVolumeId(matchQuery.seriesFolder ?: matchQuery.seriesName)
 
-        // Check the seriesName if no id was found in seriesFolder
-        if (matchQuery.seriesFolder != null && extractedId == null) {
-            extractedId = extractVolumeId(matchQuery.seriesName)
-        }
+            // Check the seriesName if no id was found in seriesFolder
+            if (matchQuery.seriesFolder != null && extractedId == null) {
+                extractedId = extractVolumeId(matchQuery.seriesName)
+            }
 
-        if (extractedId != null) {
-            val result = handleResult(client.getVolume(ComicVineVolumeId(extractedId)))
-            return mapper.toSeriesMetadata(result, null)
+            if (extractedId != null) {
+                val result = handleResult(client.getVolume(ComicVineVolumeId(extractedId)))
+                return mapper.toSeriesMetadata(result, null)
+            }
         }
 
         val searchResults = handleResult(
